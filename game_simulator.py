@@ -265,12 +265,87 @@ class JaipurBoard:
         return self.player_camels[player_id]
 
 
+class JaipurPlayer:
+    def __init__(self, player_id):
+        self.player_id = player_id
+
+    def select_action(self, game_object):
+        raise NotImplementedError
+
+class RandomPlayer(JaipurPlayer):
+    def select_action(self, game_object):
+        return self.random_action(game_object)
+
+    def random_action(self, game_object):
+        possible_list = []
+        player_cards = game_object.get_player_cards(self.player_id)
+        player_camels = game_object.get_player_camels(self.player_id)
+        # taking all camels
+        if any(c.is_camel for c in game_object.market):
+            possible_list.append(TakeAllCamels())
+        # selling goods
+        if any(c.is_goods for c in player_cards): 
+            goods_type = list(c.goods_type for c in player_cards if c.is_goods)
+            random_goods = random.choice(goods_type)
+            goods_list = [c for c in player_cards if (c.is_goods and c.goods_type == random_goods)]
+            goods_num = random.randrange(1, len(goods_list)+1)
+            goods_to_sell_list = goods_list[:goods_num]
+            possible_list.append(SellGoods(goods_to_sell_list))
+        # taking one goods
+        if any(c.is_goods for c in game_object.market):
+            random_good = random.choice(list(c for c in game_object.market if c.is_goods))
+            possible_list.append(TakeOneGoods(random_good))
+        # exchanging goods
+        if any(c.is_goods for c in game_object.market):
+            market_goods = [c for c in game_object.market if c.is_goods]
+            max_exchange_num = min(len(player_cards) + len(player_camels), len(market_goods))
+            if max_exchange_num > 0:
+                exchange_size = random.randrange(1, max_exchange_num + 1)
+                min_required_camel_num = max(0, exchange_size - len(player_cards))
+                camel_num = random.randrange(min_required_camel_num, len(player_camels) + 1)
+                goods_num = exchange_size - camel_num
+                player_exchg_list = player_camels[:camel_num] + player_cards[:goods_num] 
+                market_exchg_list = market_goods[:exchange_size] 
+                possible_list.append(ExchangeGoods(player_exchg_list, market_exchg_list))
+
+        return random.choice(possible_list)
+        
+
+class JaipurGame:
+    def __init__(self, player0, player1):
+        INIT_CAMEL_NUM = 11
+        self.game_object = JaipurBoard(
+            [JaipurGold, JaipurSilver, JaipurDiamonds, JaipurSilk, JaipurSpice, JaipurLeather],
+            INIT_CAMEL_NUM
+        )
+        self.players = player0, player1
+        self.game_object.init_game()
+
+    def play_one_turn(self):
+        print("player0's action")
+        player0_action = self.players[0].select_action(self.game_object)
+        print("  action is {}".format(player0_action))
+        if not self.game_object.is_action_valid(0, player0_action):
+            print("player0 attempted an invalid action: {}".format(player0_action))
+            raise Exception()
+        self.game_object.execute_action(0, player0_action)
+        self.game_object.display_state()
+
+        print("player1's action")
+        player1_action = self.players[1].select_action(self.game_object)
+        print("  action is {}".format(player1_action))
+        if not self.game_object.is_action_valid(1, player1_action):
+            print("player1 attempted an invalid action: {}".format(player1_action))
+            raise Exception()
+        self.game_object.execute_action(1, player1_action)
+        self.game_object.display_state()
+        
+            
 
 if __name__ == "__main__":
-    game = JaipurGame(
-        [JaipurGold, JaipurSilver, JaipurJewelry, JaipurSilk, JaipurSpice, JaipurLeather],
-        20
-    )
-
-    game.init_game()
-    game.display_state()
+    game = JaipurGame(RandomPlayer(0), RandomPlayer(1))
+    game.game_object.display_state()
+    for i in range(5):
+        print("playing one turn")
+        game.play_one_turn()
+        print("\n")
