@@ -5,6 +5,10 @@ class JaipurCard:
     def is_camel(self):
         return isinstance(self, Camel)
 
+    @property
+    def is_goods(self):
+        return isinstance(self, GoodsCard)
+
 class JaipurGoods:
     def __init__(self, name, card_num, reward_list, minimum_sell_number=None):
         self.name = name
@@ -47,49 +51,65 @@ class Token:
 
 class JaipurActionType:
     @property
-    def is_take_all_camels:
+    def is_take_all_camels(self):
         return False
     @property
-    def is_take_one_goods:
+    def is_take_one_goods(self):
         return False
     @property
-    def is_exchange_goods:
+    def is_exchange_goods(self):
         return False
     @property
-    def is_sell_goods:
+    def is_sell_goods(self):
         return False
 
 class TakeAllCamels(JaipurActionType):
     def __init__(self):
         pass
     @property
-    def is_take_all_camels
+    def is_take_all_camels(self):
         return True
+    def __repr__(self):
+        return "(TakeAllCamels)"
+    def __str__(self):
+        return self.__repr__()
 
 class SellGoods(JaipurActionType):
     def __init__(self, list_good_to_sell):
         self.list_good_to_sell = list_good_to_sell
     @property
-    def is_sell_goods:
+    def is_sell_goods(self):
         return True
+    def __repr__(self):
+        return "(SellGoods:{}->)".format(self.list_good_to_sell)
+    def __str__(self):
+        return self.__repr__()
 
 class ExchangeGoods(JaipurActionType):
     def __init__(self, player_exchg_goods, market_exchg_goods):
         self.player_exchg_goods = player_exchg_goods
         self.market_exchg_goods = market_exchg_goods
     @property
-    def is_exchange_goods:
+    def is_exchange_goods(self):
         return True
+    def __repr__(self):
+        return "(ExchangeGoods:{}<->{})".format(self.player_exchg_goods, self.market_exchg_goods)
+    def __str__(self):
+        return self.__repr__()
 
 class TakeOneGoods(JaipurActionType):
     def __init__(self, market_goods):
         self.market_goods = market_goods
     @property
-    def is_take_one_goods:
+    def is_take_one_goods(self):
         return True
+    def __repr__(self):
+        return "(TakeOneGoods:{})".format(self.market_goods)
+    def __str__(self):
+        return self.__repr__()
 
 
-class JaipurGame:
+class JaipurBoard:
     def __init__(self, goods_list, camel_num, init_market_camel=2):
         self.goods_list = goods_list
         self.camel_num = camel_num
@@ -141,6 +161,9 @@ class JaipurGame:
         else:
             self.player_hands[player_id].append(new_card)
 
+    def game_end_state(self):
+        return (len(gt for gt in tokens if not self.tokens[gt]) >= 3) or not len(self.stack)
+
     def display_state(self):
         print("{} card(s) in stack".format(len(self.stack)))
         print("Market: {}".format(self.market))
@@ -158,20 +181,23 @@ class JaipurGame:
             return any(c.is_camel for c in self.market)
 
         elif action.is_take_one_goods:
-            return self.market_goods in self.market
+            return action.market_goods in self.market
 
         elif action.is_sell_goods:
-            goods_type = action.list_good_to_sell[0]
+            goods_type = action.list_good_to_sell[0].goods_type
             same_goods_type = all(c.goods_type == goods_type for c in action.list_good_to_sell)
             goods_in_player_hands = all(c in self.player_hands[player_id] for c in action.list_good_to_sell)
+            goods_sell_num = len(action.list_good_to_sell)
+            goods_constraint = True if goods_type.minimum_sell_number is None else goods_sell_num >= goods_type.minimum_sell_number
+
             # FIXME: implement goods constraints (e.g. not able to sell less
             # than 2 rare goods)
-            return same_goods_type and goods_in_player_hands
+            return same_goods_type and goods_in_player_hands and goods_constraint
 
         elif action.is_exchange_goods:
             goods_in_player_hands = all(c in self.player_hands[player_id] for c in action.player_exchg_goods if not c.is_camel)
             camel_in_player_possession = all(c in self.player_camels[player_id] for c in action.player_exchg_goods if c.is_camel)
-            target_goods_in_market = all(c in self.market for c in action.market_exchg_goods)
+            target_goods_in_market = all((c in self.market and not c.is_camel) for c in action.market_exchg_goods)
             return goods_in_player_hands and camel_in_player_possession and target_goods_in_market
 
         else:
@@ -182,21 +208,28 @@ class JaipurGame:
         remaining_goods_token_num = len(self.tokens[goods_type])
         awarded_goods_token_num = min(remaining_goods_token_num, goods_num)
         goods_token = [self.tokens[goods_type].pop(0) for i in range(awarded_goods_token_num)]
+        tokens = goods_token
         # preparing bonus token
         if goods_num in self.bonus_tokens and len(self.bonus_tokens[goods_num]):
             bonus_token = self.bonus_token[goods_num].pop(0)
-        return goods_token + [bonus_token]
+            tokens.append(bonus_token)
+        return tokens
 
     def execute_action(self, player_id, action):
         if action.is_take_all_camels:
             camel_cards = [c for c in self.market if c.is_camel]
             self.market = [c for c in self.market if not c.is_camel]
-            self.player_camels[player_id] += camel_cards
+            self.player_camels[player_id].extend(camel_cards)
+            # replacing camels by stack cards
+            while len(self.market) < 5:
+                self.market.append(self.stack.pop(0))
 
         elif action.is_take_one_goods:
             goods_card = action.market_goods
-            self.market = self.market.remove(goods_card)
+            self.market.remove(goods_card)
             self.player_hands[player_id].append(goods_card)
+            # replacing good by stack card
+            self.market.append(self.stack.pop(0))
 
         elif action.is_sell_goods:
             # removing sold goods from player hands
@@ -212,16 +245,24 @@ class JaipurGame:
         elif action.is_exchange_goods:
             # removing exchanged goods from player hands
             for card in action.player_exchg_goods:
-                self.player_hands[player_id].remove(card)
+                if card.is_camel:
+                    self.player_camels[player_id].remove(card)
+                else:
+                    self.player_hands[player_id].remove(card)
             # removing exchanged goods from market
             for card in action.market_exchg_goods:
                 self.market.remove(card)
 
             self.market += action.player_exchg_goods
-            self.player_hands[player_id] += action.market_exchg_goods
+            self.player_hands[player_id].extend(action.market_exchg_goods)
 
         else:
             raise NotImplementedError
+
+    def get_player_cards(self, player_id):
+        return self.player_hands[player_id]
+    def get_player_camels(self, player_id):
+        return self.player_camels[player_id]
 
 
 
