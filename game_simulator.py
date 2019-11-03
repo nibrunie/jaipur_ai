@@ -6,17 +6,18 @@ class JaipurCard:
         return isinstance(self, Camel)
 
 class JaipurGoods:
-    def __init__(self, name, card_num, reward_list):
+    def __init__(self, name, card_num, reward_list, minimum_sell_number=None):
         self.name = name
         self.card_num = card_num
         self.reward_list = reward_list
+        self.minimum_sell_number = minimum_sell_number
 
-JaipurGold = JaipurGoods("gold", 5, [7, 7, 5, 5, 5, 4])
-JaipurSilver = JaipurGoods("silver", 7, [6, 6, 5, 5, 4, 4])
-JaipurJewelry = JaipurGoods("jewelery", 6, [7, 6, 5, 5, 5, 4])
-JaipurSilk = JaipurGoods("silk", 9, [5, 4, 4, 4, 3, 3])
-JaipurSpice = JaipurGoods("spice", 10, [5, 4, 4, 3, 3, 2])
-JaipurLeather = JaipurGoods("leather", 12, [4, 3, 3, 3, 2, 2])
+JaipurGold = JaipurGoods("gold", 6, [7, 7, 5, 5, 5, 4], 2)
+JaipurSilver = JaipurGoods("silver", 6, [6, 6, 5, 5, 4, 4], 2)
+JaipurDiamonds = JaipurGoods("diamond", 6, [7, 6, 5, 5, 5, 4], 2)
+JaipurSilk = JaipurGoods("silk", 8, [5, 4, 4, 4, 3, 3])
+JaipurSpice = JaipurGoods("spice", 8, [5, 4, 4, 3, 3, 2])
+JaipurLeather = JaipurGoods("leather", 10, [4, 3, 3, 3, 2, 2])
 
 class Camel(JaipurCard):
     def __str__(self):
